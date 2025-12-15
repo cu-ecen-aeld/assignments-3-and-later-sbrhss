@@ -31,22 +31,34 @@ struct aesd_buffer_entry *aesd_circular_buffer_find_entry_offset_for_fpos(struct
 {
     size_t current_offset = 0;
     uint8_t index;
+    uint8_t start_index;
+    uint8_t count;
     struct aesd_buffer_entry *entry;
     
     if (buffer == NULL || entry_offset_byte_rtn == NULL) {
         return NULL;
     }
     
-    AESD_CIRCULAR_BUFFER_FOREACH(entry, buffer, index) {
-        if (buffer->full || index < buffer->out_offs || 
-            (index >= buffer->in_offs && buffer->in_offs <= buffer->out_offs)) {
-            if (entry->buffptr != NULL && entry->size > 0) {
-                if (char_offset < current_offset + entry->size) {
-                    *entry_offset_byte_rtn = char_offset - current_offset;
-                    return entry;
-                }
-                current_offset += entry->size;
+    // Determine how many entries are valid
+    if (buffer->full) {
+        count = AESDCHAR_MAX_WRITE_OPERATIONS_SUPPORTED;
+        start_index = buffer->out_offs;
+    } else {
+        count = buffer->in_offs - buffer->out_offs;
+        start_index = buffer->out_offs;
+    }
+    
+    // Iterate through valid entries starting from out_offs
+    for (uint8_t i = 0; i < count; i++) {
+        index = (start_index + i) % AESDCHAR_MAX_WRITE_OPERATIONS_SUPPORTED;
+        entry = &buffer->entry[index];
+        
+        if (entry->buffptr != NULL && entry->size > 0) {
+            if (char_offset < current_offset + entry->size) {
+                *entry_offset_byte_rtn = char_offset - current_offset;
+                return entry;
             }
+            current_offset += entry->size;
         }
     }
     
